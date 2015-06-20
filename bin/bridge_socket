@@ -2,6 +2,7 @@
 
 require_relative '../lib/bridge_socket'
 require 'digest/sha1'
+require 'fileutils'
 require 'daemon_spawn'
 
 
@@ -42,16 +43,16 @@ rescue => e
 
 Usage:
 Start bridge:
-  $ #{$0} start <character device path> <socket path> [options]
+  $ bridge_socket start <character device path> <socket path> [options]
 
 Stop bridge:
-  $ #{$0} stop <character device path> [options]
+  $ bridge_socket stop <character device path> [options]
 
 Restart bridge:
-  $ #{$0} restart <character device path> [options]
+  $ bridge_socket restart <character device path> [options]
 
 Bridge satus:
-  $ #{$0} status <character device path> [options]
+  $ bridge_socket status <character device path> [options]
 
 ptions:
   --logdir=<dir> : log-file dir.
@@ -77,6 +78,8 @@ piddir = if ARGV.find{|a| a=~/^(--piddir=(.+))$/}
          else
            logdir
          end
+FileUtils.mkdir_p(logdir)
+FileUtils.mkdir_p(piddir)
 BridgeSocketServer.spawn!(log_file:File.join(logdir, "bridge_socket-#{key}.log"),
                           pid_file:File.join(piddir, "bridge_socket-#{key}.pid"),
                           sync_log:true,
