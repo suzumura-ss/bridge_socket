@@ -1,0 +1,84 @@
+#!/usr/bin/env ruby
+
+require_relative '../lib/bridge_socket'
+require 'digest/sha1'
+require 'daemon_spawn'
+
+
+class BridgeSocketServer < DaemonSpawn::Base
+  def start(args)
+    puts "#{Time.now}: Starting for #{args.join(' ')}"
+    Kernel.at_exit{
+      puts "#{Time.now}: Stopped for #{args.join(' ')}"
+    }
+    @this = BridgeSocket.new
+    if args.find{|a| a=~/^(--retry=(.+))$/}
+      args.delete($1)
+      @this.retry_interval = $2.to_i
+    end
+    @this.start(args[0], args[1]){|msg, e|
+      puts "#{e} #{msg}"
+    }
+  end
+
+  def stop
+    @this.stop
+  end
+end
+
+
+
+begin
+  raise "command required." unless ARGV[0]
+  if ARGV[0]=='stop'
+    BridgeSocket.test([ARGV[1]])
+  else
+    BridgeSocket.test([ARGV[1], ARGV[2]])
+  end
+rescue => e
+  unless e.is_a? Errno::ENOENT and ARGV.find{|v| v=~/^--retry=/}
+    puts e
+    puts <<__USAGE__
+
+Usage:
+Start bridge:
+  $ #{$0} start <character device path> <socket path> [options]
+
+Stop bridge:
+  $ #{$0} stop <character device path> [options]
+
+Restart bridge:
+  $ #{$0} restart <character device path> [options]
+
+Bridge satus:
+  $ #{$0} status <character device path> [options]
+
+ptions:
+  --logdir=<dir> : log-file dir.
+  --piddir=<dir> : pid-file dir.
+  --retry=<sec>  : retry interval in sec.
+
+__USAGE__
+    exit 1
+  end
+end
+
+key = Digest::SHA1.digest(ARGV[1]).unpack("H*")[0]
+wdir = File.expand_path('..', File.dirname(__FILE__))
+logdir = if ARGV.find{|a| a=~/^(--logdir=(.+))$/}
+           ARGV.delete($1)
+           $2
+         else
+           "#{wdir}/log"
+         end
+piddir = if ARGV.find{|a| a=~/^(--piddir=(.+))$/}
+           ARGV.delete($1)
+           $2
+         else
+           logdir
+         end
+BridgeSocketServer.spawn!(log_file:File.join(logdir, "bridge_socket-#{key}.log"),
+                          pid_file:File.join(piddir, "bridge_socket-#{key}.pid"),
+                          sync_log:true,
+                          singleton:true,
+                          working_dir:wdir)
